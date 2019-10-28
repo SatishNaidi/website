@@ -1,0 +1,72 @@
+version: '3.4'
+
+x-webapp-template: &webapp-template
+  # We have to use the host network mode to make sure that the URLs for object
+  # storage which appear in the web interface match the ones the server uses.
+  #image: dci-wm2ffm7z-dtr-58fea5724f392247.elb.eu-west-2.amazonaws.com/admin/nj:v1
+  build: .
+  deploy:
+      placement:
+        constraints:
+          - node.role == manager
+  network_mode: host
+  expose:
+    - "8000"
+  env_file:
+    - ./env/webapp.env
+    - ./env/minio.env
+  depends_on:
+    - smtp
+    - minio
+
+services:
+
+  # A DB web frontend
+  dbpanel:
+    image: dockage/phppgadmin
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+    ports:
+      - "8003:80"
+    environment:
+      PHP_PG_ADMIN_SERVER_HOST: myapp.ckcrpvlozk6o.us-west-2.rds.amazonaws.com
+
+  # minio provides an S3-compatible API so we can use object storage in
+  # development.
+  minio:
+    image: minio/minio
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+    env_file: ./env/minio.env
+    ports:
+      - "8001:9000"
+    command: ['gateway', 's3']
+
+  # Debug SMTP provider. Provides UI on http://localhost:8025/
+  smtp:
+    image: mailhog/mailhog
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+    ports:
+      - "1025:1025"
+      - "8002:8025"
+
+  # The web application itself
+  webapp:
+    <<: *webapp-template
+
+  # Convenience service to make sure the latest database migrations are applied.
+  webapp_migrate:
+    <<: *webapp-template
+    # HACK: we sleep to give the database time to come up
+    entrypoint: ['sh', '-c', 'sleep 15 && ./manage.py migrate']
+
+volumes:
+  # Persistent volumes for object store
+  minio-data-local:
