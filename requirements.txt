@@ -1,5 +1,5 @@
 # djangocms-forms does not support Django 2
-Django>=1.11,<2.0
+Django>=3.2.24,<2.0
 Pillow>=3.0
 boto3
 django-classy-tags>=0.9
